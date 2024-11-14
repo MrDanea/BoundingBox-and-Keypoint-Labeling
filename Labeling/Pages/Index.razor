@@ -1,3 +1,185 @@
 ﻿@page "/"
+@using Labeling
+@using System.Drawing
+@using System.Drawing.Imaging
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JSRuntime
+@inject Identify identify
 
-<h1>Hello, world!</h1>
+@{
+    if (!identify.IsIdentified)
+    {
+        Navigation.NavigateTo("/admin");
+    }
+}
+<div class="container-fluid h-100 d-flex flex-column">
+    <div class="row flex-grow-1 overflow-auto mb-5">
+        <div class="col-2 sidebar h-100 border-right d-flex flex-column p-3">
+            <div class="sidebar-item-1 mb-3">
+                <h2>Danh sách ảnh</h2>
+                <label for="file-input" class="btn btn-primary btn-sm">
+                    Chọn ảnh
+                </label>
+                <InputFile OnChange="InputFileHandle" multiple id="file-input" class="file-input" accept="image/*"  style="display:none"/>
+            </div>
+            <div class="sidebar-item-2 flex-grow-1 overflow-auto">
+                <ul id="image-list" class="list-group">
+                    @if (Directory.Exists(Path.Combine(imagepath, identify.Username)))
+                    {
+                        foreach (var img in Directory.GetFiles(Path.Combine(imagepath, identify.Username)))
+                        {
+                            string filename = Path.GetFileNameWithoutExtension(img);
+                            <li id="image-@filename" class="list-group-item btn btn-light btn-sm d-block text-truncate">@filename</li>
+                        }
+                    }
+                </ul>
+                <a id="username" style="display:none">@identify.Username</a>
+            </div>
+        </div>
+
+        <div class="col-8 main-content d-flex flex-column justify-content-between h-100 p-3">
+            <div class="controls d-flex justify-content-end mb-3">
+                <button class="btn btn-success" @onclick="Export">Export</button>
+            </div>
+            <div class="tarbar">
+                <button class="tarbar-btn"id="del-dane-test">Delete</button>
+                <button class="tarbar-btn">Pointer</button>
+                <button class="tarbar-btn">Drag</button>
+                <button class="tarbar-btn">Zoom in</button>
+                <button class="tarbar-btn">Zoom out</button>
+            </div>
+            <div class="update-button">
+                <button class="btn btn-success" id="commit-and-update">Commit & Update</button>
+            </div>
+            <div id="image-container" class="image-container flex-grow-1"></div>
+        </div>
+
+        <div class="col-md-2 information-bar d-flex flex-column h-200 p-3">
+            <div class="information-header bg-light py-3 text-center" style="height: 30vh;">
+                <h3>Information</h3>
+            </div>
+            <h4 class="history-title">History</h4>
+            <div class="history bg-light py-3 flex-grow-1 text-center overflow-auto">
+                <ul class="list-group" style="overflow-y: auto;" id="rectangle-list">
+                </ul>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="row bg-light py-3 w-100 fixed-bottom">
+        <div class="col labeling d-flex justify-content-center">
+            <ul class="list-group list-group-horizontal" id="labeling-ul" style="cursor: pointer;">
+                <li class="list-group-item" id="human">Human</li>
+                <li class="list-group-item" id="nose">Nose</li>
+                <li class="list-group-item" id="leye">LEye</li>
+                <li class="list-group-item" id="reye">REye</li>
+                <li class="list-group-item" id="lear">LEar</li>
+                <li class="list-group-item" id="rear">REar</li>
+                <li class="list-group-item" id="lshoulder">LShoulder</li>
+                <li class="list-group-item" id="rshoulder">RShoulder</li>
+                <li class="list-group-item" id="lelbow">LElbow</li>
+                <li class="list-group-item" id="relbow">RElbow</li>
+                <li class="list-group-item" id="lwrist">LWrist</li>
+                <li class="list-group-item" id="rwrist">RWrist</li>
+                <li class="list-group-item" id="lhip">LHip</li>
+                <li class="list-group-item" id="rhip">RHip</li>
+                <li class="list-group-item" id="lknee">LKnee</li>
+                <li class="list-group-item" id="rknee">RKnee</li>
+                <li class="list-group-item" id="lankle">LAnkle</li>
+                <li class="list-group-item" id="rankle">RAnkle</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+
+<script src="js/script1.js"></script>
+@code {
+    private string imagepath { get { return PathParam.Instance.ImagesPath; } }
+    public string DisplayImageUrl { get; set; } = "";
+    public string FileName { get; set; } = "";
+    public long FileSize { get; set; }
+    public string FileType { get; set; } = "";
+    public DateTimeOffset LastModified { get; set; }
+    const int MAX_FILESIZE = 50000 * 1024; //5mb
+
+    private void Delete()
+    {
+
+    }
+
+    public async Task InputFileHandle(InputFileChangeEventArgs e)
+    {
+        foreach (var browserFile in e.GetMultipleFiles())
+        {
+            if (browserFile != null)
+            {
+                FileSize = browserFile.Size;
+                FileName = browserFile.Name;
+                FileType = browserFile.ContentType;
+                LastModified = browserFile.LastModified;
+
+                try
+                {
+                    var fileStream = browserFile.OpenReadStream(MAX_FILESIZE);
+                    var uploadPathUser = Path.Combine(imagepath, identify.Username);
+                    if (!Directory.Exists(uploadPathUser))
+                    {
+                        Directory.CreateDirectory(uploadPathUser);
+                    }
+                    var fileName = browserFile.Name; 
+                    var targetFilePath = Path.Combine(uploadPathUser, fileName);
+                    using (var targetStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.Write))
+                    {
+                        await fileStream.CopyToAsync(targetStream);
+                    }
+                    log.writeLog($"InputFileHandle: {targetFilePath}");
+                }
+                catch (Exception ex)
+                {
+                    log.writeLog($"InputFileHandle: {ex} Error saving file");
+                    throw;
+                }
+            }
+        }
+    }
+
+    private void selectImage(string filename) => DisplayImageUrl = $"\\images\\{filename}";
+
+    private async Task Export()
+    {
+        foreach(var doc in DB.History.SelectAll())
+        {
+            double imageWidth = Convert.ToDouble(doc.imageWidth);
+            double imageHeight = Convert.ToDouble(doc.imageHeight);
+            double width = Convert.ToDouble(doc.width);
+            double height = Convert.ToDouble(doc.height);
+            double centerX = Convert.ToDouble(doc.centerX);
+            double centerY = Convert.ToDouble(doc.centerY);
+            if(doc != null)
+            {
+                Normalized normalized = new Normalized(imageWidth, imageHeight)
+                {
+                     BoxCenterX = centerX,
+                     BoxCenterY = centerY,
+                     BoxWidth = width,
+                     BoxHeight = height
+                };
+                Label label = new LabelBuilder()
+                    .SetClassIndex(0)
+                    .SetBoundingBox(normalized.NormalizedBoxCenterX, normalized.NormalizedBoxCenterY, normalized.NormalizedBoxWidth, normalized.NormalizedBoxHeight)
+                    .Build();
+                if (await new FileExport(doc.ObjectId, label.ToString(), JSRuntime).Export())
+                {
+                    // string projectDirectory = AppContext.BaseDirectory;
+                    // projectDirectory = Directory.GetParent(Directory.GetParent(Directory.GetParent(Directory.GetParent(projectDirectory).FullName).FullName).FullName).FullName;
+                    // var builder = new DatasetZipBuilder()
+                    //     .SetSourceLabelsPath(projectDirectory);
+                    // builder.Build();
+                    await JSRuntime.InvokeVoidAsync("downloadFile", "202412116213662a-image_5.txt");
+                }
+            }
+        }
+    }
+}

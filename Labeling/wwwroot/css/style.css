@@ -1,0 +1,107 @@
+﻿/* Cài đặt chiều cao và căn giữa văn bản của các phần tử <li> */
+.custom-li {
+    height: 32px; /* Chiều cao của phần tử */
+    line-height: 32px; /* Căn chỉnh nội dung theo chiều dọc */
+    padding-left: 10px; /* Cách lề bên trái 10px */
+    padding-right: 16px; /* Đảm bảo padding phải có khoảng trống cho văn bản */
+    border: none; /* Bỏ border mặc định */
+    text-align: left; /* Căn trái nội dung bên trong */
+}
+
+    /* Hiệu ứng hover */
+    .custom-li:hover {
+        background-color: rgba(0, 123, 255, 0.5); /* Màu xanh nhạt khi hover */
+        cursor: pointer; /* Hiển thị con trỏ chuột dạng pointer */
+        transition: background-color 0.3s ease; /* Thêm hiệu ứng chuyển màu */
+    }
+.image-select {
+    height: 50px;
+}
+/* Đảm bảo phần tử fixed-bottom không bị che khuất */
+.fixed-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000; /* Đảm bảo phần tử này luôn nằm trên cùng */
+}
+
+/* Cấu hình lại chiều cao của các phần tử */
+.container-fluid {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.row.flex-grow-1 {
+    flex-grow: 1;
+    overflow: auto;
+}
+
+.history {
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+.history-title {
+    margin-top: 0;
+}
+
+.main-content {
+    position: relative;
+    flex-grow: 1;
+    padding-bottom: 40px; /* Cung cấp không gian cho fixed-bottom */
+}
+
+/* Cấu hình cho phần tarbar (sidebar dọc) bên phải */
+.tarbar {
+    position: absolute;
+    top: 200px; /* Cách nút Export 100px */
+    right: 0; /* Di chuyển thanh điều hướng sang bên phải */
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: #f8f9fa; /* Màu nền sáng cho thanh điều hướng */
+    padding: 10px;
+    z-index: 10; /* Đảm bảo thanh điều hướng ở trên các phần tử khác */
+}
+
+.tarbar-btn {
+    width: 100%;
+    height: 30px;
+    margin-bottom: 5px; /* Khoảng cách giữa các nút */
+    background-color: #007bff; /* Màu nền nút */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    text-align: center;
+    cursor: pointer;
+}
+
+    .tarbar-btn:hover {
+        background-color: #0056b3; /* Màu nền khi hover */
+    }
+.information-bar {
+    width:200px;
+}
+.labeling .list-group-item {
+    font-size: 14px; /* Thu nhỏ kích thước chữ */
+    padding: 4px 6px; /* Giảm kích thước padding để thu nhỏ item */
+}
+
+.labeling .list-group {
+    font-size: 14px;
+    transform: scale(1.3); /* Thu nhỏ toàn bộ ul */
+}
+.update-button {
+    position: fixed;
+    top: calc(85%); /* Cố định nút cách phần trên của màn hình 100px dưới tarbar */
+    left: 76%; /* Đặt vị trí ngang của nút ở giữa màn hình */
+    transform: translateX(-50%); /* Điều chỉnh lại vị trí của nút để căn giữa chính xác */
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
