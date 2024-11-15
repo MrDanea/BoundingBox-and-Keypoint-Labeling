@@ -1,10 +1,12 @@
-﻿namespace System
+﻿using Labeling;
+
+namespace System
 {
     public partial class DB
     {
         public static void runDB()
         {
-            string dir = Environment.CurrentDirectory;
+            string dir = PathParam.Instance.DBPath;
             DB.AccountDB(dir + "/DataBase");
         }
     }
@@ -22,7 +24,13 @@
             {
                 if(DB.Identify.Find("admin") == null)
                 {
-                    DB.Identify.Insert(new Document() { ObjectId = "admin", UserID = "admin", Password = "1" });
+                    Document admin = new Document() 
+                    {
+                        ObjectId = "admin", 
+                        UserID = "admin", 
+                        Password = "1" 
+                    };
+                    DB.Identify.Insert(admin);
                 }
             }
         }

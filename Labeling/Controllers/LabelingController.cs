@@ -42,7 +42,7 @@ namespace Labeling
             {
                 DB.History.Insert(new Document()
                 {
-                    ObjectId = "20241211" + data.imageName,
+                    ObjectId = "" + data.imageName,
                     classindex = "0",
                     width = data.width,
                     height = data.height,
@@ -55,10 +55,9 @@ namespace Labeling
             return response;
         }
         [HttpGet("downloadlabelfile")]
-        public IActionResult DownloadLabelFile(string fileName)
+        public IActionResult DownloadLabelFile(string fileName, string username)
         {
-            string tempPath = Path.GetTempPath();
-            var filePath = Path.Combine(tempPath, fileName);
+            var filePath = Path.Combine(PathParam.Instance.LabelsPath, username , fileName + ".txt");
 
             if (!System.IO.File.Exists(filePath))
             {
@@ -67,28 +66,30 @@ namespace Labeling
             var fileBytes = System.IO.File.ReadAllBytes(filePath);
             return File(fileBytes, "text/plain", fileName);
         }
-        [HttpGet("getimages")]
-        public async Task<IActionResult> GetImage(string doc)
+        [HttpPost("getimages")]
+        public async Task<IActionResult> GetImages(Document doc)
         {
-            var imageDirectory = Path.Combine(PathParam.Instance.ImagesPath, doc);
-
-            if (!Directory.Exists(imageDirectory))
+            if(doc.userName != null && doc.imageName != null)
             {
-                return NotFound("Directory not found.");
+                var imageDirectory = Path.Combine(PathParam.Instance.ImagesPath, doc.userName);
+
+                if (!Directory.Exists(imageDirectory))
+                {
+                    return NotFound("Directory not found.");
+                }
+
+                var imagePath = Path.Combine(imageDirectory, doc.imageName + ".jpg");
+
+                if (!System.IO.File.Exists(imagePath))
+                {
+                    return NotFound("File not found.");
+                }
+
+                var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+                return File(imageBytes, "image/jpeg", doc.imageName);
             }
-
-            var imagePath = Path.Combine(imageDirectory, "635bdab2-image_6.jpg");
-
-            if (!System.IO.File.Exists(imagePath))
-            {
-                return NotFound("File not found.");
-            }
-
-            var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
-            return File(imageBytes, "image/jpeg", "635bdab2-image_6.jpg");
+            return NotFound("Directory not found or File not found");
         }
-
-
     }
 }
 namespace System
@@ -106,6 +107,7 @@ namespace System
         public string? imageWidth { get => GetString(nameof(imageWidth)); set => Push(nameof(imageWidth), value); }
         public string? imageHeight { get => GetString(nameof(imageHeight)); set => Push(nameof(imageHeight), value); }
         public string? imageName { get => GetString(nameof(imageName)); set => Push(nameof(imageName), value); }
+        public string? userName { get => GetString(nameof(userName)); set => Push(nameof(userName), value); }
 
     }
 }

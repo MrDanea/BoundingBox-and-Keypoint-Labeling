@@ -26,7 +26,7 @@ $(document).ready(function () {
         imageSelected = $(this).text();
 
         // Load new image
-        loadImage(username, stage);
+        loadImage(username, imageSelected, stage);
     });
 
     // Labeling list click handler
@@ -62,13 +62,19 @@ $(document).ready(function () {
     $('#commit-and-update').click(Update);
 });
 
-function loadImage(username, stage) {
+function loadImage(username, imagename, stage) {
+    const data = {
+        userName: username,
+        imageName: imagename
+    }
     $.ajax({
-        url: `/api/labeling/getimages?doc=${encodeURIComponent(username)}`,
-        method: 'GET',
+        url: `/api/labeling/getimages`,
+        method: 'POST',
+        contentType: 'application/json',
         xhrFields: {
             responseType: 'blob'
         },
+        data: JSON.stringify(data),
         success: function (data) {
             console.log('Image data received:', data);
 
@@ -278,4 +284,29 @@ function Update() {
             }
         });
     }
+}
+
+function downloadFile(fileName, username) {
+    $.ajax({
+        url: `/api/labeling/downloadlabelfile?fileName=${encodeURIComponent(fileName)}&username=${encodeURIComponent(username)}`,
+        type: 'GET',
+        xhrFields: {
+            responseType: 'blob'
+        },
+        success: function (data) {
+            var url = window.URL.createObjectURL(data);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            alert("download: Success");
+        },
+        error: function (xhr, status, error) {
+            console.error("Error downloading file:", error);
+            alert("download: Error");
+        }
+    });
 }

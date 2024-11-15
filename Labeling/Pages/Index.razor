@@ -145,8 +145,6 @@
         }
     }
 
-    private void selectImage(string filename) => DisplayImageUrl = $"\\images\\{filename}";
-
     private async Task Export()
     {
         foreach(var doc in DB.History.SelectAll())
@@ -170,14 +168,14 @@
                     .SetClassIndex(0)
                     .SetBoundingBox(normalized.NormalizedBoxCenterX, normalized.NormalizedBoxCenterY, normalized.NormalizedBoxWidth, normalized.NormalizedBoxHeight)
                     .Build();
-                if (await new FileExport(doc.ObjectId, label.ToString(), JSRuntime).Export())
+                if (await new FileExport(doc.ObjectId, label.ToString(), JSRuntime).Export(identify.Username))
                 {
                     // string projectDirectory = AppContext.BaseDirectory;
                     // projectDirectory = Directory.GetParent(Directory.GetParent(Directory.GetParent(Directory.GetParent(projectDirectory).FullName).FullName).FullName).FullName;
                     // var builder = new DatasetZipBuilder()
                     //     .SetSourceLabelsPath(projectDirectory);
                     // builder.Build();
-                    await JSRuntime.InvokeVoidAsync("downloadFile", "202412116213662a-image_5.txt");
+                    await JSRuntime.InvokeVoidAsync("downloadFile", doc.ObjectId, identify.Username);
                 }
             }
         }

@@ -24,7 +24,7 @@
 
         public PathParam() 
         {
-            this._dbpath = Environment.CurrentDirectory;
+            this._dbpath = Path.GetTempPath();
             this._imagespath = Path.Combine(Path.GetTempPath(), "images");
             this._labelpath = Path.Combine(Path.GetTempPath(), "labels");
             this._zippath = Path.Combine(Path.GetTempPath(), "zip)");

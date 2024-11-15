@@ -17,13 +17,13 @@ namespace Labeling
             this.filename = filename;
             this.content = content;
         }
-        public async Task<bool> Export()
+        public async Task<bool> Export(string username)
         {
             if (filename != null)
             {
                 try
                 {
-                    var url = Path.Combine(PathParam.Instance.LabelsPath, filename + ".txt");
+                    var url = Path.Combine(PathParam.Instance.LabelsPath, username, filename + ".txt");
                     await File.WriteAllTextAsync(url, content);
                     log.writeLog("The file has been successfully written!");
                     return true;
