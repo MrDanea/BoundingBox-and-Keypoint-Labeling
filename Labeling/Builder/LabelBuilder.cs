@@ -8,6 +8,7 @@ namespace Labeling
         public double Y { get; private set; }
         public double Width { get; private set; }
         public double Height { get; private set; }
+        public int Visible { get; private set; }
         public List<Dictionary<string, double>> Keypoints { get; private set; }
 
         public Label(int classIndex, double x, double y, double width, double height, List<Dictionary<string, double>> keypoints)
@@ -60,12 +61,13 @@ namespace Labeling
             return this;
         }
 
-        public LabelBuilder AddKeypoint(double px, double py)
+        public LabelBuilder AddKeypoint(double px, double py, double visible)
         {
             _keypoints.Add(new Dictionary<string, double>()
             {
                 {"x", px},
-                {"y", py}
+                {"y", py},
+                {"visible",  visible}
             });
             return this;
         }

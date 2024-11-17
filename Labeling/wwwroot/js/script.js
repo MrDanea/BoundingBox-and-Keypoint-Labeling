@@ -1,259 +1,389 @@
-﻿var widthImg = 0;
+﻿// State variables
+var widthImg = 0;
 var heightImg = 0;
-var widthBox = 0;
-var heightBox = 0;
-var xbox = 0;
-var ybox = 0;
-var boundingBoxInfo;
 var canDrawBoundingBox = false;
-let rectangles = []; 
-let selectedLi = null; 
+let rectangles = [];
+let circles = [];
+let selectedLi = null;
 var imageSelected = "";
 var rectanglesByImage = new Map();
+var circlesByImage = new Map();
 var currentRectangles = [];
+var currentCircles = [];
 var boundingBoxesByImage = {};
-var imageURL = "";
-var imageURLlist;
+var keyPointByImage = {};
+
 $(document).ready(function () {
     var stage = new Konva.Stage({
         container: 'image-container',
         willReadFrequently: true
     });
+
     $('#image-list').on('click', 'li', function () {
         let username = $('#username').text();
-        getImageUrls(username, stage);
-        $('#image-list li').each(function () {
-            $(this).removeClass('bg-success text-white');
-        });
-        $(this).addClass('bg-success text-white');
-        imageSelected = $(this).text();
 
-    });
-    $('#labeling-ul').on('click', 'li', function () {
-        $('#labeling-ul li').each(function () {
-            $(this).css('background-color', '');  // Xóa màu nền
-            $(this).css('color', '');  // Xóa màu chữ
+        // Reset current selection
+        $('#image-list li').removeClass('bg-success text-white');
+        $(this).addClass('bg-success text-white');
+        $('#labeling-ul li').css({
+            'background-color': '',
+            'color': ''
         });
-        $(this).css('background-color', '#4CAF50');  // Màu nền khi click
-        $(this).css('color', 'white');  // Màu chữ khi click
+        canDrawBoundingBox = false;
+        imageSelected = $(this).text();
+        loadImage(username, imageSelected, stage);
+    });
+
+    $('#labeling-ul').on('click', 'li', function () {
+        $('#labeling-ul li').css({
+            'background-color': '',
+            'color': ''
+        });
+
+        $(this).css({
+            'background-color': '#4CAF50',
+            'color': 'white'
+        });
 
         var object = $(this).text();
         canDrawBoundingBox = (object === "Human");
-        drawRectangle(stage);  
+
+        initializeDrawing(stage);
     });
-    $('#rectangle-list').on('click', 'li', function () {
+
+    $('#history-list').on('click', 'li', function () {
         if (selectedLi) {
-            selectedLi.css('background-color', ''); // Xóa màu nền của li cũ
+            selectedLi.css('background-color', '');
         }
         selectedLi = $(this);
-        selectedLi.css('background-color', '#4CAF50'); // Thêm màu nền cho li đã chọn
+        selectedLi.css('background-color', '#4CAF50');
     });
-    $('#del-dane-test').click(deleteRectangle);
+
+    $('#del-dane-test').click(function () {
+        if (canDrawBoundingBox) {
+            deleteRectangle();
+        } else {
+            deleteCircle();
+        }
+    });
+
     $('#commit-and-update').click(Update);
 });
-function imageLoading(imageObj) {
-    var image = new Konva.Image({
+
+function loadImage(username, imagename, stage) {
+    const data = {
+        userName: username,
+        imageName: imagename
+    }
+    $.ajax({
+        url: `/api/labeling/getimages`,
+        method: 'POST',
+        contentType: 'application/json',
+        xhrFields: {
+            responseType: 'blob'
+        },
+        data: JSON.stringify(data),
+        success: function (data) {
+            console.log('Image data received:', data);
+
+            const objectUrl = URL.createObjectURL(data);
+            const imageObj = new Image();
+
+            imageObj.onload = function () {
+                console.log('Image loaded successfully');
+                console.log('Dimensions:', imageObj.width, 'x', imageObj.height);
+
+                widthImg = imageObj.width;
+                heightImg = imageObj.height;
+
+                stage.width(widthImg);
+                stage.height(heightImg);
+
+                var layer = new Konva.Layer({ willReadFrequently: true });
+                layer.add(createImage(imageObj));
+                stage.add(layer);
+
+                // Reset current shapes when loading new image
+                clearCurrentShape();
+
+                // Load saved shapes for this image
+                loadRectangles(stage);
+                loadCircles(stage);
+            };
+
+            imageObj.onerror = function (error) {
+                console.error('Error loading image:', error);
+                alert("Lỗi khi tải ảnh");
+            };
+
+            imageObj.src = objectUrl;
+        },
+        error: function (error) {
+            console.error('AJAX Error:', error);
+            alert("Không thể tải ảnh.");
+        }
+    });
+}
+
+function createImage(imageObj) {
+    return new Konva.Image({
         x: 0,
         y: 0,
         image: imageObj,
         width: imageObj.width,
         height: imageObj.height
     });
-    return image;
 }
-function drawRectangle(stage) {
-    var layer = new Konva.Layer();
-    let li = null;
 
-    stage.on('mousedown', () => {
-        if (!canDrawBoundingBox) return;
-        var mousePos = stage.getPointerPosition();
-        let rect = new Konva.Rect({
-            x: mousePos.x,
-            y: mousePos.y,
-            width: 2,
-            height: 2,
-            stroke: 'blue',
-            strokeWidth: 2,
+function initializeDrawing(stage) {
+    var drawingLayer = new Konva.Layer({ willReadFrequently: true });
+    stage.add(drawingLayer);
+
+    let isDrawing = false;
+    let startPos = null;
+    let rect = null;
+
+    // Remove previous event listeners
+    stage.off('click mousedown mousemove mouseup');
+
+    // Mouse Click for Keypoints
+    stage.on('click', function () {
+        if (canDrawBoundingBox) return;
+
+        startPos = stage.getPointerPosition();
+        const point = new Konva.Circle({
+            x: startPos.x,
+            y: startPos.y,
+            radius: 2,
+            fill: 'red',
+            stroke: 'black',
+            strokeWidth: 1,
         });
-        layer.add(rect);
+        drawingLayer.add(point);
+        drawingLayer.draw();
 
-        // Tạo li tương ứng cho rectangle mới
-        li = $('<li class="custom-li">Rectangle ' + (currentRectangles.length + 1) + '</li>');
-        li.attr('data-id', currentRectangles.length);
-        $('#rectangle-list').append(li);
+        const keypointInfo = {
+            x: startPos.x,
+            y: startPos.y,
+            visible: 0,
+        };
 
-        // Lưu rectangle và li vào mảng hiện tại
-        currentRectangles.push({ rect: rect, li: li });
+        if (!keyPointByImage[imageSelected]) {
+            keyPointByImage[imageSelected] = [];
+        }
+        keyPointByImage[imageSelected].push(keypointInfo);
 
-        let isDragging = false;
+        // Add to history list with current count
+        const li = $('<li class="custom-li">').text(`Keypoint ${currentCircles.length + 1}`);
+        li.attr('data-id', currentCircles.length);
+        $('#history-list').append(li);
 
-        stage.on('mousemove', () => {
-            if (!isDragging) return;
-
-            const pos = stage.getPointerPosition();
-            const width = pos.x - mousePos.x;
-            const height = pos.y - mousePos.y;
-
-            rect.width(Math.abs(width));
-            rect.height(Math.abs(height));
-            rect.x(width < 0 ? pos.x : mousePos.x);
-            rect.y(height < 0 ? pos.y : mousePos.y);
-
-            layer.batchDraw();
-        });
-
-        stage.on('mouseup', () => {
-            isDragging = false;
-
-            const widthBox = rect.width();
-            const heightBox = rect.height();
-            const centerX = rect.x() + widthBox / 2;
-            const centerY = rect.y() + heightBox / 2;
-
-            boundingBoxInfo = {
-                imageName: imageSelected,
-                imageWidth: widthImg,
-                imageHeight: heightImg,
-                width: widthBox,
-                height: heightBox,
-                x: rect.x(),
-                y: rect.y(),
-                centerX: centerX,
-                centerY: centerY
-            };
-            if (!boundingBoxesByImage[imageSelected]) {
-                boundingBoxesByImage[imageSelected] = [];
-            }
-            boundingBoxesByImage[imageSelected].push(boundingBoxInfo);
-            saveCurrentRectangles(); 
-        });
-
-        isDragging = true;
+        currentCircles.push({ rect: point, li: li });
+        circlesByImage.set(imageSelected, currentCircles);
     });
-    stage.add(layer);
-}
-function saveCurrentRectangles() {
-    rectanglesByImage.set(imageSelected, currentRectangles);
-}
-function loadRectangles(stage) {
-    clearCurrentRectangles(stage);
 
-    if (rectanglesByImage.has(imageSelected)) {
-        var rectangles = rectanglesByImage.get(imageSelected);
-        var layer = new Konva.Layer();
+    // Mousedown event for Rectangles
+    stage.on('mousedown', function (e) {
+        if (!canDrawBoundingBox) return;
 
-        rectangles.forEach(({ rect, li }) => {
-            layer.add(rect);
-            $('#rectangle-list').append(li);
-            currentRectangles.push({ rect, li });
+        isDrawing = true;
+        startPos = stage.getPointerPosition();
+
+        // Create new rectangle
+        rect = new Konva.Rect({
+            x: startPos.x,
+            y: startPos.y,
+            width: 0,
+            height: 0,
+            stroke: 'blue',
+            strokeWidth: 2
+        });
+
+        drawingLayer.add(rect);
+        drawingLayer.draw();
+    });
+
+    // Mousemove event for Rectangles
+    stage.on('mousemove', function () {
+        if (!isDrawing) return;
+
+        const pos = stage.getPointerPosition();
+        const width = pos.x - startPos.x;
+        const height = pos.y - startPos.y;
+
+        rect.width(Math.abs(width));
+        rect.height(Math.abs(height));
+        rect.x(width < 0 ? pos.x : startPos.x);
+        rect.y(height < 0 ? pos.y : startPos.y);
+
+        drawingLayer.batchDraw();
+    });
+
+    // Mouseup event for Rectangles
+    stage.on('mouseup', function () {
+        if (!isDrawing) return;
+
+        isDrawing = false;
+
+        if (rect.width() < 5 || rect.height() < 5) {
+            rect.destroy();
+            drawingLayer.draw();
+            return;
+        }
+
+        // Create bounding box info
+        const boundingBoxInfo = {
+            imageName: imageSelected,
+            imageWidth: widthImg,
+            imageHeight: heightImg,
+            width: rect.width(),
+            height: rect.height(),
+            x: rect.x(),
+            y: rect.y(),
+            centerX: rect.x() + rect.width() / 2,
+            centerY: rect.y() + rect.height() / 2
+        };
+
+        if (!boundingBoxesByImage[imageSelected]) {
+            boundingBoxesByImage[imageSelected] = [];
+        }
+        boundingBoxesByImage[imageSelected].push(boundingBoxInfo);
+
+        // Add to history list with current count
+        const li = $('<li class="custom-li">').text(`Rectangle ${currentRectangles.length + 1}`);
+        li.attr('data-id', currentRectangles.length);
+        $('#history-list').append(li);
+
+        currentRectangles.push({ rect: rect, li: li });
+        rectanglesByImage.set(imageSelected, currentRectangles);
+    });
+}
+
+function loadCircles(stage) {
+    clearCurrentShape();
+
+    if (circlesByImage.has(imageSelected)) {
+        var circles = circlesByImage.get(imageSelected);
+        var layer = new Konva.Layer({ willReadFrequently: true });
+
+        circles.forEach(({ rect, li }, index) => {
+            if (rect && li) {
+                layer.add(rect);
+                // Update the text to ensure sequential numbering
+                const newLi = li.clone();
+                newLi.text(`Keypoint ${index + 1}`);
+                $('#history-list').append(newLi);
+                currentCircles.push({ rect, li: newLi });
+            }
         });
 
         stage.add(layer);
     }
 }
-function clearCurrentRectangles(stage) {
-    currentRectangles.forEach(({ rect, li }) => {
-        rect.destroy();
-        li.remove(); 
-    });
-    currentRectangles = []; 
+
+function loadRectangles(stage) {
+    clearCurrentShape();
+
+    if (rectanglesByImage.has(imageSelected)) {
+        var rectangles = rectanglesByImage.get(imageSelected);
+        var layer = new Konva.Layer({ willReadFrequently: true });
+
+        rectangles.forEach(({ rect, li }, index) => {
+            if (rect && li) {
+                layer.add(rect);
+                // Update the text to ensure sequential numbering
+                const newLi = li.clone();
+                newLi.text(`Rectangle ${index + 1}`);
+                $('#history-list').append(newLi);
+                currentRectangles.push({ rect, li: newLi });
+            }
+        });
+
+        stage.add(layer);
+    }
 }
+
+function clearCurrentShape() {
+    currentRectangles.forEach(({ rect, li }) => {
+        if (rect) rect.destroy();
+        if (li) li.remove();
+    });
+    currentCircles.forEach(({ rect, li }) => {
+        if (rect) rect.destroy();
+        if (li) li.remove();
+    });
+    currentRectangles = [];
+    currentCircles = [];
+    $('#history-list').empty();
+}
+
+function deleteCircle() {
+    if (selectedLi) {
+        const id = selectedLi.attr('data-id');
+        const circle = currentCircles[id];
+        if (circle) {
+            circle.rect.destroy();
+            selectedLi.remove();
+            selectedLi = null;
+            currentCircles[id] = null;
+            circlesByImage.set(imageSelected, currentCircles.filter(item => item !== null));
+
+            // Renumber remaining circles
+            $('#history-list li').each(function (index) {
+                $(this).text(`Keypoint ${index + 1}`);
+            });
+        }
+    }
+}
+
 function deleteRectangle() {
     if (selectedLi) {
         const id = selectedLi.attr('data-id');
         const rectangle = currentRectangles[id];
-        rectangle.rect.destroy();
-        selectedLi.remove();
-        selectedLi = null;
-        currentRectangles[id] = null;
-        saveCurrentRectangles();
+        if (rectangle) {
+            rectangle.rect.destroy();
+            selectedLi.remove();
+            selectedLi = null;
+            currentRectangles[id] = null;
+            rectanglesByImage.set(imageSelected, currentRectangles.filter(item => item !== null));
+
+            // Renumber remaining rectangles
+            $('#history-list li').each(function (index) {
+                $(this).text(`Rectangle ${index + 1}`);
+            });
+        }
     }
 }
+
 function Update() {
-    const boundingBoxInfo = getBoundingBoxInfoForSelectedImage()[0];
-    if (boundingBoxInfo != null) {
-        boundingBoxInfo.width = parseFloat(boundingBoxInfo.width);
-        boundingBoxInfo.height = parseFloat(boundingBoxInfo.height);
-        boundingBoxInfo.x = parseFloat(boundingBoxInfo.x);
-        boundingBoxInfo.y = parseFloat(boundingBoxInfo.y);
-        boundingBoxInfo.centerX = parseFloat(boundingBoxInfo.centerX);
-        boundingBoxInfo.centerY = parseFloat(boundingBoxInfo.centerY);
+    const boundingBoxes = boundingBoxesByImage[imageSelected];
+    if (boundingBoxes && boundingBoxes.length > 0) {
+        const boundingBoxInfo = boundingBoxes[0];
+
+        // Parse float values
+        const data = {
+            ...boundingBoxInfo,
+            width: parseFloat(boundingBoxInfo.width),
+            height: parseFloat(boundingBoxInfo.height),
+            x: parseFloat(boundingBoxInfo.x),
+            y: parseFloat(boundingBoxInfo.y),
+            centerX: parseFloat(boundingBoxInfo.centerX),
+            centerY: parseFloat(boundingBoxInfo.centerY)
+        };
+
         $.ajax({
             url: 'api/labeling/commitnupdate',
             type: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify(boundingBoxInfo),
+            data: JSON.stringify(data),
             success: function (response) {
-                console.log(response);
-                alert(response.Message); // Hiển thị thông báo
+                console.log('Update successful:', response);
+                alert(response.Message);
             },
             error: function (xhr, status, error) {
-                console.error("Request failed: " + error);
+                console.error("Update failed:", error);
+                alert("Cập nhật thất bại: " + error);
             }
         });
     }
 }
-function getBoundingBoxInfoForSelectedImage() {
-    var t = boundingBoxesByImage[imageSelected] || [];
-    return t;
-}
-function downloadFile(fileName) {
-    $.ajax({
-        url: `/api/labeling/downloadlabelfile?fileName=${encodeURIComponent(fileName)}`,
-        type: 'GET',
-        xhrFields: {
-            responseType: 'blob'
-        },
-        success: function (data) {
-            var url = window.URL.createObjectURL(data);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            alert("download: Success");
-        },
-        error: function (xhr, status, error) {
-            console.error("Error downloading file:", error);
-            alert("download: Error");
-        }
-    });
-}
-// Hàm AJAX để tải ảnh từ server
-function getImageUrls(username, stage) {
-    $.ajax({
-        url: `/api/labeling/getimages?doc=${encodeURIComponent(username)}`,
-        method: 'GET',
-        xhrFields: {
-            responseType: 'blob'
-        },
-        success: function (data) {
-            const objectUrl = URL.createObjectURL(data);
-            const imageObj = new Image();
-            imageObj.src = objectUrl;
-            imageObj.onload = function () {
-                //
-                widthImg = imageObj.width;
-                heightImg = imageObj.height;
-                //
-                stage.width(widthImg);
-                stage.height(heightImg);
-
-                var layer = new Konva.Layer({ willReadFrequently: true });
-                layer.add(imageLoading(imageObj))
-                stage.add(layer);
-                loadRectangles(stage);
-            };
-        },
-        error: function () {
-            alert("Không thể tải ảnh.");
-        }
-    });
-}
-function showlog(msg) {
-    console.log(msg);
-}
-

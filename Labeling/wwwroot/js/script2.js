@@ -3,20 +3,24 @@ var widthImg = 0;
 var heightImg = 0;
 var canDrawBoundingBox = false;
 let rectangles = [];
+let circles = [];
 let selectedLi = null;
 var imageSelected = "";
 var rectanglesByImage = new Map();
+var circlesByImage = new Map();
 var currentRectangles = [];
+var currentCircles = [];
 var boundingBoxesByImage = {};
+var keyPointByImage = {};
+var listKeypoint;
+
 
 $(document).ready(function () {
-    // Khởi tạo stage với willReadFrequently
     var stage = new Konva.Stage({
         container: 'image-container',
         willReadFrequently: true
     });
 
-    // Image list click handler
     $('#image-list').on('click', 'li', function () {
         let username = $('#username').text();
 
@@ -29,7 +33,6 @@ $(document).ready(function () {
         loadImage(username, imageSelected, stage);
     });
 
-    // Labeling list click handler
     $('#labeling-ul').on('click', 'li', function () {
         $('#labeling-ul li').css({
             'background-color': '',
@@ -44,12 +47,10 @@ $(document).ready(function () {
         var object = $(this).text();
         canDrawBoundingBox = (object === "Human");
 
-        // Khởi tạo layer mới cho drawing
         initializeDrawing(stage);
     });
 
-    // Rectangle list click handler
-    $('#rectangle-list').on('click', 'li', function () {
+    $('#history-list').on('click', 'li', function () {
         if (selectedLi) {
             selectedLi.css('background-color', '');
         }
@@ -57,7 +58,6 @@ $(document).ready(function () {
         selectedLi.css('background-color', '#4CAF50');
     });
 
-    // Button handlers
     $('#del-dane-test').click(deleteRectangle);
     $('#commit-and-update').click(Update);
 });
@@ -130,7 +130,39 @@ function initializeDrawing(stage) {
     let isDrawing = false;
     let startPos = null;
     let rect = null;
+    // Mouse Click
+    stage.on('click', function () {
+        if (canDrawBoundingBox) return;
+        startPos = stage.getPointerPosition();
+        point = new Konva.Circle({
+            x: startPos.x,
+            y: startPos.y,
+            radius: 2,
+            fill: 'red',
+            stroke: 'black',
+            strokeWidth: 1,
+        });
+        drawingLayer.add(point);
+        drawingLayer.draw();
 
+        const keypointInfo = {
+            x: startPos.x,
+            y: startPos.y,
+            visible: 0,
+        };
+        listKeypoint.add(keypointInfo)
+        if (!keyPointByImage[imageSelected]) {
+            keyPointByImage[imageSelected] = [];
+        }
+        keyPointByImage[imageSelected].push(listKeypoint);
+
+        const li = $('<li class="custom-li">').text(`Keypoint ${currentCircles.length + 1}`);
+        li.attr('data-id', currentCircles.length);
+        $('#history-list').append(li);
+
+        currentCircles.push({ rect: rect, li: li });
+        keyPointByImage.set(imageSelected, currentCircles);
+    });
     // Mousedown event
     stage.on('mousedown', function (e) {
         if (!canDrawBoundingBox) return;
@@ -202,7 +234,7 @@ function initializeDrawing(stage) {
         // Create list item
         const li = $('<li class="custom-li">').text(`Rectangle ${currentRectangles.length + 1}`);
         li.attr('data-id', currentRectangles.length);
-        $('#rectangle-list').append(li);
+        $('#history-list').append(li);
 
         // Save rectangle
         currentRectangles.push({ rect: rect, li: li });
@@ -210,9 +242,40 @@ function initializeDrawing(stage) {
     });
 }
 
+function loadCircle(stage) {
+    clearCurrentShape();
+
+    if (circlesByImage.has(imageSelected)) {
+        var circles = circlesByImage.get(imageSelected);
+        var layer = new Konva.Layer({ willReadFrequently: true });
+
+        circles.forEach(({ rect, li }) => {
+            if (rect && li) {
+                layer.add(rect);
+                $('#history-list').append(li);
+                currentCircles.push({ rect, li });
+            }
+        });
+
+        stage.add(layer);
+    }
+}
+
+function deleteCircle() {
+    if (selectedLi) {
+        const id = selectedLi.attr('data-id');
+        const circle = currentCircles[id];
+        if (circle) {
+            circle.rect.destroy();
+            selectedLi.remove();
+            selectedLi = null;
+            currentCircles[id] = null;
+            circlesByImage.set(imageSelected, currentCircles);
+        }
+    }
+}
 function loadRectangles(stage) {
-    // Clear existing rectangles
-    clearCurrentRectangles();
+    clearCurrentShape();
 
     if (rectanglesByImage.has(imageSelected)) {
         var rectangles = rectanglesByImage.get(imageSelected);
@@ -221,7 +284,7 @@ function loadRectangles(stage) {
         rectangles.forEach(({ rect, li }) => {
             if (rect && li) {
                 layer.add(rect);
-                $('#rectangle-list').append(li);
+                $('#history-list').append(li);
                 currentRectangles.push({ rect, li });
             }
         });
@@ -230,13 +293,18 @@ function loadRectangles(stage) {
     }
 }
 
-function clearCurrentRectangles() {
+function clearCurrentShape() {
     currentRectangles.forEach(({ rect, li }) => {
         if (rect) rect.destroy();
         if (li) li.remove();
     });
+    currentCircles.forEach(({ rect, li }) => {
+        if (rect) rect.destroy();
+        if (li) li.remove();
+    });
     currentRectangles = [];
-    $('#rectangle-list').empty();
+    currentCircles = [];
+    $('#history-list').empty();
 }
 
 function deleteRectangle() {
