@@ -149,36 +149,89 @@
         }
     }
 
+    private Dictionary<string, double> ConvertToDouble(Document doc)
+    {
+        var result = new Dictionary<string, double>();
+        try
+        {
+            result["imageWidth"] = SafeConvertToDouble(doc.imageWidth);
+            result["imageHeight"] = SafeConvertToDouble(doc.imageHeight);
+
+            if (doc.boundingBoxes?.Count == 1)
+            {
+                var box = doc.boundingBoxes.FirstOrDefault();
+                if (box != null)
+                {
+                    result["width"] = SafeConvertToDouble(box.width);
+                    result["height"] = SafeConvertToDouble(box.height);
+                    result["centerX"] = SafeConvertToDouble(box.centerX);
+                    result["centerY"] = SafeConvertToDouble(box.centerY);
+                }
+            }
+
+            if (doc.keypoints != null && doc.keypoints.Any())
+            {
+                int count = 0;
+                foreach (var kp in doc.keypoints)
+                {
+                    result[$"x{count}"] = SafeConvertToDouble(kp.x);
+                    result[$"y{count}"] = SafeConvertToDouble(kp.y);
+                    result[$"visible{count}"] = SafeConvertToDouble(kp.visible);
+                    count++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log.writeLog($"ConvertToDouble: {ex}");
+        }
+
+        return result;
+    }
+
+    private double SafeConvertToDouble(object? input)
+    {
+        return double.TryParse(input?.ToString(), out double result) ? result : 0.0;
+    }
+
+    public T GetV<T>(Dictionary<string, T> dictionary, string key, T defaultValue = default)
+    {
+        if (dictionary == null)
+        {
+            throw new ArgumentNullException(nameof(dictionary), "The dictionary cannot be null.");
+        }
+
+        if (string.IsNullOrEmpty(key))
+        {
+            throw new ArgumentException("The key cannot be null or empty.", nameof(key));
+        }
+
+        return dictionary.TryGetValue(key, out var value) ? value : defaultValue;
+    }
+
     private async Task Export()
     {
         foreach(var doc in DB.History.SelectAll())
         {
-            double imageWidth = Convert.ToDouble(doc.imageWidth);
-            double imageHeight = Convert.ToDouble(doc.imageHeight);
-            double width = Convert.ToDouble(doc.width);
-            double height = Convert.ToDouble(doc.height);
-            double centerX = Convert.ToDouble(doc.centerX);
-            double centerY = Convert.ToDouble(doc.centerY);
+            Dictionary<string, double> res = ConvertToDouble(doc);
             if(doc != null)
             {
-                Normalized normalized = new Normalized(imageWidth, imageHeight)
+                Normalized normalized = new Normalized(GetV<double>(res, "imageWidth", 0), GetV<double>(res, "imageHeight", 0))
                 {
-                     BoxCenterX = centerX,
-                     BoxCenterY = centerY,
-                     BoxWidth = width,
-                     BoxHeight = height
+                    BoxCenterX = GetV<double>(res, "centerX", 0),
+                    BoxCenterY = GetV<double>(res, "centerY", 0),
+                    BoxWidth = GetV<double>(res, "width", 0),
+                    BoxHeight = GetV<double>(res, "height", 0),
+                    NormalizedKeypointList = res
                 };
                 Label label = new LabelBuilder()
                     .SetClassIndex(0)
                     .SetBoundingBox(normalized.NormalizedBoxCenterX, normalized.NormalizedBoxCenterY, normalized.NormalizedBoxWidth, normalized.NormalizedBoxHeight)
+                    .AddKeypoint(normalized.NormalizedKeypointList)
                     .Build();
-                if (await new FileExport(doc.ObjectId, label.ToString(), JSRuntime).Export(identify.Username))
+                string content = label.ToString();
+                if (new FileExport(doc.ObjectId, content, JSRuntime).Export(identify.Username))
                 {
-                    // string projectDirectory = AppContext.BaseDirectory;
-                    // projectDirectory = Directory.GetParent(Directory.GetParent(Directory.GetParent(Directory.GetParent(projectDirectory).FullName).FullName).FullName).FullName;
-                    // var builder = new DatasetZipBuilder()
-                    //     .SetSourceLabelsPath(projectDirectory);
-                    // builder.Build();
                     await JSRuntime.InvokeVoidAsync("downloadFile", doc.ObjectId, identify.Username);
                 }
             }

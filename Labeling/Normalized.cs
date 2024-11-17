@@ -12,14 +12,14 @@
 
         public double KeypointX { get; set; }
         public double KeypointY { get; set; }
-        public List<Dictionary<string, double>> KeypointsList { get; set; }
+        public Dictionary<string, double> KeypointsList { get; set; }
 
         private double _normalizedBoxCenterX;
         private double _normalizedBoxCenterY;
         private double _normalizedBoxWidth;
         private double _normalizedBoxHeight;
 
-        private List<Dictionary<string, double>> _normalizedKeypointList;
+        private Dictionary<string, double> _normalizedKeypointList;
         private double _normalizedKeypointX => (KeypointX - (BoxCenterX - BoxWidth / 2)) / BoxWidth;
         private double _normalizedKeypointY => (KeypointY - (BoxCenterY - BoxHeight / 2)) / BoxHeight;
 
@@ -27,34 +27,43 @@
         public double NormalizedBoxCenterY { get { return Math.Round(BoxCenterY / ImageHeight, 6); } }
         public double NormalizedBoxWidth { get { return Math.Round(BoxWidth / ImageWidth, 6); } }
         public double NormalizedBoxHeight { get { return Math.Round(BoxHeight / ImageHeight, 6); ; } }
-        public List<Dictionary<string, double>> NormalizedKeypointList
+        public Dictionary<string, double> NormalizedKeypointList
         {
             get { return _normalizedKeypointList; }
-            set { value = NormalizedKeypoints(); }
+            set { _normalizedKeypointList = NormalizedKeypoints(value); }
         }
         public Normalized(double imageWidth, double imageHeight)
         {
             this.ImageWidth = imageWidth;
             this.ImageHeight = imageHeight;
         }
-
-        public List<Dictionary<string, double>> NormalizedKeypoints()
+        public T GetV<T>(Dictionary<string, T> dictionary, string key, T defaultValue = default)
         {
-            List<Dictionary<string, double>> keyValuePairs = new List<Dictionary<string, double>>();
-            foreach(var keypoint in KeypointsList)
+            if (dictionary == null)
             {
-                double xp;
-                double yp;
-                if(keypoint.TryGetValue("x", out xp) && keypoint.TryGetValue("y", out yp))
-                {
-                    keyValuePairs.Add(new Dictionary<string, double>() 
-                    {
-                        {"x", xp },
-                        {"y", yp }
-                    });
-                }
+                throw new ArgumentNullException(nameof(dictionary), "The dictionary cannot be null.");
             }
-            return keyValuePairs;
+
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentException("The key cannot be null or empty.", nameof(key));
+            }
+
+            return dictionary.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        public Dictionary<string, double> NormalizedKeypoints(Dictionary<string, double> Keypoints)
+        {
+            Dictionary<string, double> keyValuePairs = new Dictionary<string, double>();
+            int n = (Keypoints.Count / 3) - 2;
+            for (int i = 0; i < n; i++)
+            {
+                KeypointX = GetV(Keypoints, $"x{i}", 0);
+                KeypointY = GetV(Keypoints, $"y{i}", 0);
+                Keypoints[$"x{i}"] = _normalizedKeypointX;
+                Keypoints[$"y{i}"] = _normalizedKeypointY;
+            }
+            return Keypoints;
         }
 
 

@@ -17,20 +17,19 @@ namespace Labeling
             this.filename = filename;
             this.content = content;
         }
-        public async Task<bool> Export(string username)
+        public bool Export(string username)
         {
             if (filename != null)
             {
                 try
                 {
                     var url = Path.Combine(PathParam.Instance.LabelsPath, username, filename + ".txt");
-                    await File.WriteAllTextAsync(url, content);
+                    File.WriteAllTextAsync(url, content);
                     log.writeLog("The file has been successfully written!");
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    await _jsRuntime.InvokeVoidAsync("showlog", "Error: " + ex.Message);
                     log.writeLog("Export failed. " + ex);
                     return false;
                 }

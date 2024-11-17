@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using Microsoft.Extensions.Primitives;
+using System.Text;
 namespace Labeling
 {
     public class Label
@@ -9,9 +10,9 @@ namespace Labeling
         public double Width { get; private set; }
         public double Height { get; private set; }
         public int Visible { get; private set; }
-        public List<Dictionary<string, double>> Keypoints { get; private set; }
+        public Dictionary<string, double> Keypoints { get; private set; }
 
-        public Label(int classIndex, double x, double y, double width, double height, List<Dictionary<string, double>> keypoints)
+        public Label(int classIndex, double x, double y, double width, double height, Dictionary<string, double> keypoints)
         {
             ClassIndex = classIndex;
             X = x;
@@ -25,16 +26,28 @@ namespace Labeling
         {
             StringBuilder sb = new StringBuilder();
             sb.Append($"{ClassIndex} {X} {Y} {Width} {Height}");
-            foreach (var keypoint in Keypoints)
+            int n = (Keypoints.Count / 3) - 2;
+            for(int i = 0; i < n; i++)
             {
-                double xp;
-                double yp;
-                if (keypoint.TryGetValue("x", out xp) && keypoint.TryGetValue("y", out yp))
-                {
-                    sb.Append($" {xp} {yp}");
-                }
+                sb.Append($" {GetV(Keypoints, $"x{i}", 0)}");
+                sb.Append($" {GetV(Keypoints, $"y{i}", 0)}");
+                sb.Append($" {GetV(Keypoints, $"visible{i}", 0)}");
             }
             return sb.ToString();
+        }
+        public T GetV<T>(Dictionary<string, T> dictionary, string key, T defaultValue = default)
+        {
+            if (dictionary == null)
+            {
+                throw new ArgumentNullException(nameof(dictionary), "The dictionary cannot be null.");
+            }
+
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentException("The key cannot be null or empty.", nameof(key));
+            }
+
+            return dictionary.TryGetValue(key, out var value) ? value : defaultValue;
         }
     }
     public class LabelBuilder
@@ -44,7 +57,7 @@ namespace Labeling
         private double _y;
         private double _width;
         private double _height;
-        private List<Dictionary<string, double>> _keypoints = new List<Dictionary<string, double>>();
+        private Dictionary<string, double> _keypoints = new Dictionary<string, double>();
 
         public LabelBuilder SetClassIndex(int classIndex)
         {
@@ -61,14 +74,9 @@ namespace Labeling
             return this;
         }
 
-        public LabelBuilder AddKeypoint(double px, double py, double visible)
+        public LabelBuilder AddKeypoint(Dictionary<string, double> dic)
         {
-            _keypoints.Add(new Dictionary<string, double>()
-            {
-                {"x", px},
-                {"y", py},
-                {"visible",  visible}
-            });
+            _keypoints = dic;
             return this;
         }
 

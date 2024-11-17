@@ -401,3 +401,27 @@ function saveLabeling() {
         }
     });
 }
+function downloadFile(fileName, username) {
+    $.ajax({
+        url: `/api/labeling/downloadlabelfile?fileName=${encodeURIComponent(fileName)}&username=${encodeURIComponent(username)}`,
+        type: 'GET',
+        xhrFields: {
+            responseType: 'blob'
+        },
+        success: function (data) {
+            var url = window.URL.createObjectURL(data);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            alert("download: Success");
+        },
+        error: function (xhr, status, error) {
+            console.error("Error downloading file:", error);
+            alert("download: Error");
+        }
+    });
+}
