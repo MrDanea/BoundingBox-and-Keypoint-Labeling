@@ -277,7 +277,7 @@ function saveShapeData(shape, type) {
         Object.assign(shapeData, {
             x: shape.x(),
             y: shape.y(),
-            visible: 1
+            visible: getVisible()
         });
     }
 
@@ -288,6 +288,9 @@ function saveShapeData(shape, type) {
     labelingState.shapesData.get(imageState.selectedImage).push(shapeData);
 }
 
+function getVisible() {
+    return $('#customCheck1').is(':checked') ? 1 : 0;
+}
 function loadExistingShapes() {
     const shapes = labelingState.shapesData.get(imageState.selectedImage) || [];
     shapes.forEach((data, index) => {
@@ -357,14 +360,40 @@ function saveLabeling() {
         return;
     }
 
+    // Tạo JSON để gửi đi
+    const dataToSend = {
+        imageName: imageState.selectedImage,
+        imageWidth: imageState.width,
+        imageHeight: imageState.height,
+        string_boundingBoxes: [],
+        string_keypoints: []
+    };
+
+    shapes.forEach(shape => {
+        if (shape.type === 'rectangle') {
+            dataToSend.string_boundingBoxes.push({
+                width: shape.width,
+                height: shape.height,
+                centerX: shape.centerX,
+                centerY: shape.centerY
+            });
+        } else if (shape.type === 'keypoint') {
+            dataToSend.string_keypoints.push({
+                x: shape.x,
+                y: shape.y,
+                visible: shape.visible
+            });
+        }
+    });
+
     $.ajax({
         url: 'api/labeling/commitnupdate',
         type: 'POST',
         contentType: 'application/json',
-        data: JSON.stringify(shapes[0]), // Assuming we're saving the first shape for now
+        data: JSON.stringify(dataToSend), // Gửi toàn bộ thông tin
         success: function (response) {
             console.log('Save successful:', response);
-            alert(response.Message);
+            alert(response.Msg);
         },
         error: function (error) {
             console.error("Save failed:", error);

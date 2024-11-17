@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 
 namespace Labeling
 {
@@ -40,17 +41,31 @@ namespace Labeling
             }
             else
             {
-                DB.History.Insert(new Document()
+                DocumentList? bBox = new DocumentList();
+                DocumentList? kPoint = new DocumentList();
+                if (data.string_boundingBoxes != null)
+                {
+                    string escapedJson = data.string_boundingBoxes;
+                    string json = escapedJson.Replace("\"", "\"");
+                    bBox = JsonConvert.DeserializeObject<DocumentList>(json);
+                }
+                if (data.string_keypoints != null)
+                {
+                    string escapedJson = data.string_keypoints;
+                    string json = escapedJson.Replace("\"", "\"");
+                    kPoint = JsonConvert.DeserializeObject<DocumentList>(json);
+                }
+
+                Document content = new Document()
                 {
                     ObjectId = "" + data.imageName,
                     classindex = "0",
-                    width = data.width,
-                    height = data.height,
-                    centerX = data.centerX,
-                    centerY = data.centerY,
                     imageWidth = data.imageWidth,
                     imageHeight = data.imageHeight,
-                });
+                    boundingBoxes = bBox,
+                    keypoints = kPoint,
+                };
+                DB.History.Insert(content);
             }
             return response;
         }
@@ -108,6 +123,15 @@ namespace System
         public string? imageHeight { get => GetString(nameof(imageHeight)); set => Push(nameof(imageHeight), value); }
         public string? imageName { get => GetString(nameof(imageName)); set => Push(nameof(imageName), value); }
         public string? userName { get => GetString(nameof(userName)); set => Push(nameof(userName), value); }
+        public DocumentList? boundingBoxes { get => GetArray<DocumentList>(nameof(boundingBoxes)); set => Push(nameof(boundingBoxes), value); }
+        public DocumentList? keypoints { get => GetArray<DocumentList>(nameof(keypoints)); set => Push(nameof(keypoints), value); }
+        public string? string_boundingBoxes { get => GetString(nameof(string_boundingBoxes)); set => Push(nameof(string_boundingBoxes), value); }
+        public string? string_keypoints { get => GetString(nameof(string_keypoints)); set => Push(nameof(string_keypoints), value); }
+
+        public string? visible { get => GetString(nameof(visible)); set => Push(nameof(visible), value); }
+        public string? x { get => GetString(nameof(x)); set => Push(nameof(x), value); }
+        public string? y { get => GetString(nameof(y)); set => Push(nameof(y), value); }
+
 
     }
 }
