@@ -1,389 +1,374 @@
 ﻿// State variables
-var widthImg = 0;
-var heightImg = 0;
-var canDrawBoundingBox = false;
-let rectangles = [];
-let circles = [];
-let selectedLi = null;
-var imageSelected = "";
-var rectanglesByImage = new Map();
-var circlesByImage = new Map();
-var currentRectangles = [];
-var currentCircles = [];
-var boundingBoxesByImage = {};
-var keyPointByImage = {};
+var imageState = {
+    width: 0,
+    height: 0,
+    selectedImage: "",
+    stage: null,
+    layer: null
+};
+
+var labelingState = {
+    isHumanLabeling: false,
+    currentShapes: [],
+    shapesData: new Map() // Store shapes data for each image
+};
 
 $(document).ready(function () {
-    var stage = new Konva.Stage({
+    // Initialize Konva stage
+    labelingState.stage = new Konva.Stage({
         container: 'image-container',
         willReadFrequently: true
     });
 
-    $('#image-list').on('click', 'li', function () {
-        let username = $('#username').text();
+    labelingState.layer = new Konva.Layer({ willReadFrequently: true });
+    labelingState.stage.add(labelingState.layer);
 
-        // Reset current selection
-        $('#image-list li').removeClass('bg-success text-white');
-        $(this).addClass('bg-success text-white');
-        $('#labeling-ul li').css({
-            'background-color': '',
-            'color': ''
-        });
-        canDrawBoundingBox = false;
-        imageSelected = $(this).text();
-        loadImage(username, imageSelected, stage);
-    });
-
-    $('#labeling-ul').on('click', 'li', function () {
-        $('#labeling-ul li').css({
-            'background-color': '',
-            'color': ''
-        });
-
-        $(this).css({
-            'background-color': '#4CAF50',
-            'color': 'white'
-        });
-
-        var object = $(this).text();
-        canDrawBoundingBox = (object === "Human");
-
-        initializeDrawing(stage);
-    });
-
-    $('#history-list').on('click', 'li', function () {
-        if (selectedLi) {
-            selectedLi.css('background-color', '');
-        }
-        selectedLi = $(this);
-        selectedLi.css('background-color', '#4CAF50');
-    });
-
-    $('#del-dane-test').click(function () {
-        if (canDrawBoundingBox) {
-            deleteRectangle();
-        } else {
-            deleteCircle();
-        }
-    });
-
-    $('#commit-and-update').click(Update);
+    initializeEventHandlers();
 });
 
-function loadImage(username, imagename, stage) {
+function initializeEventHandlers() {
+    // 1. Image Selection Handler
+    $('#image-list').on('click', 'li', handleImageSelection);
+
+    // 2. Labeling Type Selection Handler
+    $('#labeling-ul').on('click', 'li', handleLabelingTypeSelection);
+
+    // 3. History List Selection Handler
+    $('#history-list').on('click', 'li', handleHistorySelection);
+
+    // 4. Delete Handler
+    $('#del-dane-test').click(deleteSelectedShape);
+
+    // 5. Save Handler
+    $('#commit-and-update').click(saveLabeling);
+}
+
+// 1. Image Selection Flow
+function handleImageSelection() {
+    resetAllStates();
+
+    // Update selected image
+    $('#image-list li').removeClass('bg-success text-white');
+    $(this).addClass('bg-success text-white');
+
+    imageState.selectedImage = $(this).text();
+    const username = $('#username').text();
+
+    loadImage(username, imageState.selectedImage);
+}
+
+function resetAllStates() {
+    // Reset labeling type selection
+    $('#labeling-ul li').css({
+        'background-color': '',
+        'color': ''
+    });
+
+    // Reset labeling state
+    labelingState.isHumanLabeling = false;
+    labelingState.currentShapes = [];
+
+    // Clear history
+    $('#history-list').empty();
+
+    // Clear canvas
+    if (labelingState.layer) {
+        labelingState.layer.destroyChildren();
+        labelingState.layer.draw();
+    }
+}
+
+function loadImage(username, imageName) {
     const data = {
         userName: username,
-        imageName: imagename
-    }
+        imageName: imageName
+    };
+
     $.ajax({
         url: `/api/labeling/getimages`,
         method: 'POST',
         contentType: 'application/json',
-        xhrFields: {
-            responseType: 'blob'
-        },
+        xhrFields: { responseType: 'blob' },
         data: JSON.stringify(data),
-        success: function (data) {
-            console.log('Image data received:', data);
-
-            const objectUrl = URL.createObjectURL(data);
-            const imageObj = new Image();
-
-            imageObj.onload = function () {
-                console.log('Image loaded successfully');
-                console.log('Dimensions:', imageObj.width, 'x', imageObj.height);
-
-                widthImg = imageObj.width;
-                heightImg = imageObj.height;
-
-                stage.width(widthImg);
-                stage.height(heightImg);
-
-                var layer = new Konva.Layer({ willReadFrequently: true });
-                layer.add(createImage(imageObj));
-                stage.add(layer);
-
-                // Reset current shapes when loading new image
-                clearCurrentShape();
-
-                // Load saved shapes for this image
-                loadRectangles(stage);
-                loadCircles(stage);
-            };
-
-            imageObj.onerror = function (error) {
-                console.error('Error loading image:', error);
-                alert("Lỗi khi tải ảnh");
-            };
-
-            imageObj.src = objectUrl;
-        },
+        success: handleImageLoad,
         error: function (error) {
-            console.error('AJAX Error:', error);
+            console.error('Image load error:', error);
             alert("Không thể tải ảnh.");
         }
     });
 }
 
-function createImage(imageObj) {
-    return new Konva.Image({
-        x: 0,
-        y: 0,
-        image: imageObj,
-        width: imageObj.width,
-        height: imageObj.height
-    });
+function handleImageLoad(data) {
+    const objectUrl = URL.createObjectURL(data);
+    const imageObj = new Image();
+
+    imageObj.onload = function () {
+        // Update stage dimensions
+        imageState.width = imageObj.width;
+        imageState.height = imageObj.height;
+        labelingState.stage.width(imageState.width);
+        labelingState.stage.height(imageState.height);
+
+        // Draw image
+        const konvaImage = new Konva.Image({
+            x: 0,
+            y: 0,
+            image: imageObj,
+            width: imageState.width,
+            height: imageState.height
+        });
+
+        labelingState.layer.add(konvaImage);
+        labelingState.layer.draw();
+
+        // Load existing shapes if any
+        loadExistingShapes();
+    };
+
+    imageObj.src = objectUrl;
 }
 
-function initializeDrawing(stage) {
-    var drawingLayer = new Konva.Layer({ willReadFrequently: true });
-    stage.add(drawingLayer);
+// 2. Labeling Type Selection Flow
+function handleLabelingTypeSelection() {
+    // Reset previous selection
+    $('#labeling-ul li').css({
+        'background-color': '',
+        'color': ''
+    });
 
+    // Update current selection
+    $(this).css({
+        'background-color': '#4CAF50',
+        'color': 'white'
+    });
+
+    // Set labeling type
+    labelingState.isHumanLabeling = ($(this).text() === "Human");
+
+    // Initialize appropriate drawing handlers
+    initializeDrawing();
+}
+
+function initializeDrawing() {
+    // Remove existing event listeners
+    labelingState.stage.off('mousedown mousemove mouseup click');
+
+    if (labelingState.isHumanLabeling) {
+        initializeRectangleDrawing();
+    } else {
+        initializeKeypointDrawing();
+    }
+}
+
+function initializeRectangleDrawing() {
     let isDrawing = false;
     let startPos = null;
-    let rect = null;
+    let currentRect = null;
 
-    // Remove previous event listeners
-    stage.off('click mousedown mousemove mouseup');
-
-    // Mouse Click for Keypoints
-    stage.on('click', function () {
-        if (canDrawBoundingBox) return;
-
-        startPos = stage.getPointerPosition();
-        const point = new Konva.Circle({
-            x: startPos.x,
-            y: startPos.y,
-            radius: 2,
-            fill: 'red',
-            stroke: 'black',
-            strokeWidth: 1,
-        });
-        drawingLayer.add(point);
-        drawingLayer.draw();
-
-        const keypointInfo = {
-            x: startPos.x,
-            y: startPos.y,
-            visible: 0,
-        };
-
-        if (!keyPointByImage[imageSelected]) {
-            keyPointByImage[imageSelected] = [];
-        }
-        keyPointByImage[imageSelected].push(keypointInfo);
-
-        // Add to history list with current count
-        const li = $('<li class="custom-li">').text(`Keypoint ${currentCircles.length + 1}`);
-        li.attr('data-id', currentCircles.length);
-        $('#history-list').append(li);
-
-        currentCircles.push({ rect: point, li: li });
-        circlesByImage.set(imageSelected, currentCircles);
-    });
-
-    // Mousedown event for Rectangles
-    stage.on('mousedown', function (e) {
-        if (!canDrawBoundingBox) return;
-
+    labelingState.stage.on('mousedown', function (e) {
         isDrawing = true;
-        startPos = stage.getPointerPosition();
-
-        // Create new rectangle
-        rect = new Konva.Rect({
-            x: startPos.x,
-            y: startPos.y,
-            width: 0,
-            height: 0,
-            stroke: 'blue',
-            strokeWidth: 2
-        });
-
-        drawingLayer.add(rect);
-        drawingLayer.draw();
+        startPos = labelingState.stage.getPointerPosition();
+        currentRect = createRectangle(startPos);
     });
 
-    // Mousemove event for Rectangles
-    stage.on('mousemove', function () {
+    labelingState.stage.on('mousemove', function () {
         if (!isDrawing) return;
-
-        const pos = stage.getPointerPosition();
-        const width = pos.x - startPos.x;
-        const height = pos.y - startPos.y;
-
-        rect.width(Math.abs(width));
-        rect.height(Math.abs(height));
-        rect.x(width < 0 ? pos.x : startPos.x);
-        rect.y(height < 0 ? pos.y : startPos.y);
-
-        drawingLayer.batchDraw();
+        updateRectangle(currentRect, startPos);
     });
 
-    // Mouseup event for Rectangles
-    stage.on('mouseup', function () {
+    labelingState.stage.on('mouseup', function () {
         if (!isDrawing) return;
-
         isDrawing = false;
-
-        if (rect.width() < 5 || rect.height() < 5) {
-            rect.destroy();
-            drawingLayer.draw();
-            return;
-        }
-
-        // Create bounding box info
-        const boundingBoxInfo = {
-            imageName: imageSelected,
-            imageWidth: widthImg,
-            imageHeight: heightImg,
-            width: rect.width(),
-            height: rect.height(),
-            x: rect.x(),
-            y: rect.y(),
-            centerX: rect.x() + rect.width() / 2,
-            centerY: rect.y() + rect.height() / 2
-        };
-
-        if (!boundingBoxesByImage[imageSelected]) {
-            boundingBoxesByImage[imageSelected] = [];
-        }
-        boundingBoxesByImage[imageSelected].push(boundingBoxInfo);
-
-        // Add to history list with current count
-        const li = $('<li class="custom-li">').text(`Rectangle ${currentRectangles.length + 1}`);
-        li.attr('data-id', currentRectangles.length);
-        $('#history-list').append(li);
-
-        currentRectangles.push({ rect: rect, li: li });
-        rectanglesByImage.set(imageSelected, currentRectangles);
+        finishRectangle(currentRect);
     });
 }
 
-function loadCircles(stage) {
-    clearCurrentShape();
+function initializeKeypointDrawing() {
+    labelingState.stage.on('click', function () {
+        const pos = labelingState.stage.getPointerPosition();
+        createKeypoint(pos);
+    });
+}
 
-    if (circlesByImage.has(imageSelected)) {
-        var circles = circlesByImage.get(imageSelected);
-        var layer = new Konva.Layer({ willReadFrequently: true });
+// 3. Shape Management
+function createRectangle(startPos) {
+    const rect = new Konva.Rect({
+        x: startPos.x,
+        y: startPos.y,
+        width: 0,
+        height: 0,
+        stroke: 'blue',
+        strokeWidth: 2
+    });
 
-        circles.forEach(({ rect, li }, index) => {
-            if (rect && li) {
-                layer.add(rect);
-                // Update the text to ensure sequential numbering
-                const newLi = li.clone();
-                newLi.text(`Keypoint ${index + 1}`);
-                $('#history-list').append(newLi);
-                currentCircles.push({ rect, li: newLi });
-            }
-        });
+    labelingState.layer.add(rect);
+    return rect;
+}
 
-        stage.add(layer);
+function createKeypoint(pos) {
+    const keypoint = new Konva.Circle({
+        x: pos.x,
+        y: pos.y,
+        radius: 2,
+        fill: 'red',
+        stroke: 'black',
+        strokeWidth: 1
+    });
+
+    labelingState.layer.add(keypoint);
+    labelingState.layer.draw();
+
+    addToHistory(keypoint, 'Keypoint');
+    saveShapeData(keypoint, 'keypoint');
+}
+
+function updateRectangle(rect, startPos) {
+    const pos = labelingState.stage.getPointerPosition();
+    const width = pos.x - startPos.x;
+    const height = pos.y - startPos.y;
+
+    rect.width(Math.abs(width));
+    rect.height(Math.abs(height));
+    rect.x(width < 0 ? pos.x : startPos.x);
+    rect.y(height < 0 ? pos.y : startPos.y);
+
+    labelingState.layer.batchDraw();
+}
+
+function finishRectangle(rect) {
+    if (rect.width() < 5 || rect.height() < 5) {
+        rect.destroy();
+        labelingState.layer.draw();
+        return;
     }
+
+    addToHistory(rect, 'Rectangle');
+    saveShapeData(rect, 'rectangle');
 }
 
-function loadRectangles(stage) {
-    clearCurrentShape();
+function addToHistory(shape, type) {
+    const index = labelingState.currentShapes.length + 1;
+    const li = $('<li class="custom-li">').text(`${type} ${index}`);
+    li.attr('data-id', labelingState.currentShapes.length);
 
-    if (rectanglesByImage.has(imageSelected)) {
-        var rectangles = rectanglesByImage.get(imageSelected);
-        var layer = new Konva.Layer({ willReadFrequently: true });
+    $('#history-list').append(li);
+    labelingState.currentShapes.push({ shape: shape, li: li });
+}
 
-        rectangles.forEach(({ rect, li }, index) => {
-            if (rect && li) {
-                layer.add(rect);
-                // Update the text to ensure sequential numbering
-                const newLi = li.clone();
-                newLi.text(`Rectangle ${index + 1}`);
-                $('#history-list').append(newLi);
-                currentRectangles.push({ rect, li: newLi });
-            }
+// 4. Data Management
+function saveShapeData(shape, type) {
+    const shapeData = {
+        type: type,
+        imageName: imageState.selectedImage,
+        imageWidth: imageState.width,
+        imageHeight: imageState.height
+    };
+
+    if (type === 'rectangle') {
+        Object.assign(shapeData, {
+            width: shape.width(),
+            height: shape.height(),
+            x: shape.x(),
+            y: shape.y(),
+            centerX: shape.x() + shape.width() / 2,
+            centerY: shape.y() + shape.height() / 2
         });
-
-        stage.add(layer);
+    } else {
+        Object.assign(shapeData, {
+            x: shape.x(),
+            y: shape.y(),
+            visible: 1
+        });
     }
+
+    if (!labelingState.shapesData.has(imageState.selectedImage)) {
+        labelingState.shapesData.set(imageState.selectedImage, []);
+    }
+
+    labelingState.shapesData.get(imageState.selectedImage).push(shapeData);
 }
 
-function clearCurrentShape() {
-    currentRectangles.forEach(({ rect, li }) => {
-        if (rect) rect.destroy();
-        if (li) li.remove();
-    });
-    currentCircles.forEach(({ rect, li }) => {
-        if (rect) rect.destroy();
-        if (li) li.remove();
-    });
-    currentRectangles = [];
-    currentCircles = [];
-    $('#history-list').empty();
-}
-
-function deleteCircle() {
-    if (selectedLi) {
-        const id = selectedLi.attr('data-id');
-        const circle = currentCircles[id];
-        if (circle) {
-            circle.rect.destroy();
-            selectedLi.remove();
-            selectedLi = null;
-            currentCircles[id] = null;
-            circlesByImage.set(imageSelected, currentCircles.filter(item => item !== null));
-
-            // Renumber remaining circles
-            $('#history-list li').each(function (index) {
-                $(this).text(`Keypoint ${index + 1}`);
+function loadExistingShapes() {
+    const shapes = labelingState.shapesData.get(imageState.selectedImage) || [];
+    shapes.forEach((data, index) => {
+        if (data.type === 'rectangle') {
+            const rect = new Konva.Rect({
+                x: data.x,
+                y: data.y,
+                width: data.width,
+                height: data.height,
+                stroke: 'blue',
+                strokeWidth: 2
             });
-        }
-    }
-}
-
-function deleteRectangle() {
-    if (selectedLi) {
-        const id = selectedLi.attr('data-id');
-        const rectangle = currentRectangles[id];
-        if (rectangle) {
-            rectangle.rect.destroy();
-            selectedLi.remove();
-            selectedLi = null;
-            currentRectangles[id] = null;
-            rectanglesByImage.set(imageSelected, currentRectangles.filter(item => item !== null));
-
-            // Renumber remaining rectangles
-            $('#history-list li').each(function (index) {
-                $(this).text(`Rectangle ${index + 1}`);
+            labelingState.layer.add(rect);
+            addToHistory(rect, 'Rectangle');
+        } else {
+            const keypoint = new Konva.Circle({
+                x: data.x,
+                y: data.y,
+                radius: 2,
+                fill: 'red',
+                stroke: 'black',
+                strokeWidth: 1
             });
+            labelingState.layer.add(keypoint);
+            addToHistory(keypoint, 'Keypoint');
         }
+    });
+    labelingState.layer.draw();
+}
+
+// 5. Shape Deletion
+function handleHistorySelection() {
+    const previousSelected = $('#history-list li.selected');
+    if (previousSelected.length) {
+        previousSelected.removeClass('selected');
+    }
+    $(this).addClass('selected');
+}
+
+function deleteSelectedShape() {
+    const selected = $('#history-list li.selected');
+    if (!selected.length) return;
+
+    const index = selected.attr('data-id');
+    const shapeData = labelingState.currentShapes[index];
+
+    if (shapeData) {
+        shapeData.shape.destroy();
+        selected.remove();
+        labelingState.currentShapes[index] = null;
+
+        // Update indices of remaining shapes
+        $('#history-list li').each(function (idx) {
+            const type = labelingState.isHumanLabeling ? 'Rectangle' : 'Keypoint';
+            $(this).text(`${type} ${idx + 1}`);
+        });
+
+        labelingState.layer.draw();
     }
 }
 
-function Update() {
-    const boundingBoxes = boundingBoxesByImage[imageSelected];
-    if (boundingBoxes && boundingBoxes.length > 0) {
-        const boundingBoxInfo = boundingBoxes[0];
-
-        // Parse float values
-        const data = {
-            ...boundingBoxInfo,
-            width: parseFloat(boundingBoxInfo.width),
-            height: parseFloat(boundingBoxInfo.height),
-            x: parseFloat(boundingBoxInfo.x),
-            y: parseFloat(boundingBoxInfo.y),
-            centerX: parseFloat(boundingBoxInfo.centerX),
-            centerY: parseFloat(boundingBoxInfo.centerY)
-        };
-
-        $.ajax({
-            url: 'api/labeling/commitnupdate',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(data),
-            success: function (response) {
-                console.log('Update successful:', response);
-                alert(response.Message);
-            },
-            error: function (xhr, status, error) {
-                console.error("Update failed:", error);
-                alert("Cập nhật thất bại: " + error);
-            }
-        });
+// 6. Save Labeling Data
+function saveLabeling() {
+    const shapes = labelingState.shapesData.get(imageState.selectedImage) || [];
+    if (shapes.length === 0) {
+        alert("Không có dữ liệu để lưu.");
+        return;
     }
+
+    $.ajax({
+        url: 'api/labeling/commitnupdate',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(shapes[0]), // Assuming we're saving the first shape for now
+        success: function (response) {
+            console.log('Save successful:', response);
+            alert(response.Message);
+        },
+        error: function (error) {
+            console.error("Save failed:", error);
+            alert("Lưu thất bại: " + error);
+        }
+    });
 }
