@@ -20,13 +20,13 @@
         private double _normalizedBoxHeight;
 
         private Dictionary<string, double> _normalizedKeypointList;
-        private double _normalizedKeypointX => (KeypointX - (BoxCenterX - BoxWidth / 2)) / BoxWidth;
-        private double _normalizedKeypointY => (KeypointY - (BoxCenterY - BoxHeight / 2)) / BoxHeight;
+        private double _normalizedKeypointX => Math.Round(KeypointX / ImageWidth, 8);
+        private double _normalizedKeypointY => Math.Round(KeypointX / ImageWidth, 8);
 
-        public double NormalizedBoxCenterX { get { return Math.Round(BoxCenterX / ImageWidth, 6); } }
-        public double NormalizedBoxCenterY { get { return Math.Round(BoxCenterY / ImageHeight, 6); } }
-        public double NormalizedBoxWidth { get { return Math.Round(BoxWidth / ImageWidth, 6); } }
-        public double NormalizedBoxHeight { get { return Math.Round(BoxHeight / ImageHeight, 6); ; } }
+        public double NormalizedBoxCenterX { get { return Math.Round(BoxCenterX / ImageWidth, 8); } }
+        public double NormalizedBoxCenterY { get { return Math.Round(BoxCenterY / ImageHeight, 8); } }
+        public double NormalizedBoxWidth { get { return Math.Round(BoxWidth / ImageWidth, 8); } }
+        public double NormalizedBoxHeight { get { return Math.Round(BoxHeight / ImageHeight, 8); ; } }
         public Dictionary<string, double> NormalizedKeypointList
         {
             get { return _normalizedKeypointList; }

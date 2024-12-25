@@ -378,11 +378,19 @@ function saveLabeling() {
                 centerY: shape.centerY
             });
         } else if (shape.type === 'keypoint') {
-            dataToSend.string_keypoints.push({
-                x: shape.x,
-                y: shape.y,
-                visible: shape.visible
-            });
+            if (shape.visible == 0) {
+                dataToSend.string_keypoints.push({
+                    x: 0,
+                    y: 0,
+                    visible: 0
+                });
+            } else {
+                dataToSend.string_keypoints.push({
+                    x: shape.x,
+                    y: shape.y,
+                    visible: shape.visible
+                });
+            }
         }
     });
 
@@ -417,7 +425,6 @@ function downloadFile(fileName, username) {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            alert("download: Success");
         },
         error: function (xhr, status, error) {
             console.error("Error downloading file:", error);

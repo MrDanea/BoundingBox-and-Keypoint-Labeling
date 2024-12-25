@@ -20,11 +20,18 @@
                 <input class="form-control" @bind="password" />
             </div>
             <button class="btn btn-success" @onclick="regis">Regis</button>
+            <button class="btn btn-success" @onclick="cleardata">Clear Data</button>
+            <input @bind="obj"/>            
+            <button class="btn btn-success" @onclick="del">Delete</button>
+            <button class="btn btn-success" @onclick="show">Show</button>
+            <div>@text</div>
         </div>
     </div>
     <div class="col"></div>
 </div>
 @code {
+    public string obj = "";
+    private string text = "";
     private string userID { get; set; } = "";
     private string password { get; set; } = "";
 
@@ -35,5 +42,56 @@
             identify.regis(userID, password);
             Navigation.NavigateTo("/login");
         }
+    }
+    public void cleardata() {
+        foreach (var doc in DB.History.SelectAll())
+        {
+            DB.History.Delete(doc.ObjectId);
+        }
+        string imagepath = PathParam.Instance.ImagesPath;
+        var uploadPathUser = Path.Combine(imagepath, identify.Username);
+        if (!Directory.Exists(uploadPathUser))
+        {
+            Directory.CreateDirectory(uploadPathUser);
+        }
+        string[] files = Directory.GetFiles(uploadPathUser);
+
+        if (files.Length == 0)
+        {
+            Console.WriteLine("Không có tệp nào trong thư mục!");
+            return;
+        }
+
+        foreach (string file in files)
+        {
+            try
+            {
+                File.Delete(file); 
+                Console.WriteLine($"Đã xóa tệp: {file}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Lỗi khi xóa tệp {file}: {ex.Message}");
+            }
+        }
+    }
+    public void del(){
+        try
+        {
+            DB.History.Delete(obj);
+            text = "success";
+        }
+        catch
+        {
+            text = "fail";
+        }
+    }
+    public void show()
+    {
+        string a = "";
+        foreach (var doc in DB.History.SelectAll()){
+            a += doc.ObjectId + "\n";
+        }
+        text = a.TrimEnd('\n');
     }
 }

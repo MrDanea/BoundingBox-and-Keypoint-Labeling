@@ -46,7 +46,8 @@
                     <input type="checkbox" id="customCheck1">
                     <label for="customCheck1">Visible=1</label>
                 </div>
-                <button class="tarbar-btn"id="del-dane-test">Delete</button>
+@*                 <button class="tarbar-btn" id="del-dane-test">Delete</button>*@                
+                <button class="tarbar-btn" @onclick="cleardata">Delete</button>
                 <button class="tarbar-btn">Pointer</button>
                 <button class="tarbar-btn">Drag</button>
                 <button class="tarbar-btn">Zoom in</button>
@@ -234,6 +235,36 @@
                 {
                     await JSRuntime.InvokeVoidAsync("downloadFile", doc.ObjectId, identify.Username);
                 }
+            }
+        }
+    }
+
+    public void cleardata()
+    {
+        string imagepath = PathParam.Instance.ImagesPath;
+        var uploadPathUser = Path.Combine(imagepath, identify.Username);
+        if (!Directory.Exists(uploadPathUser))
+        {
+            Directory.CreateDirectory(uploadPathUser);
+        }
+        string[] files = Directory.GetFiles(uploadPathUser);
+
+        if (files.Length == 0)
+        {
+            Console.WriteLine("Không có tệp nào trong thư mục!");
+            return;
+        }
+
+        foreach (string file in files)
+        {
+            try
+            {
+                File.Delete(file);  // Xóa tệp
+                Console.WriteLine($"Đã xóa tệp: {file}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Lỗi khi xóa tệp {file}: {ex.Message}");
             }
         }
     }
